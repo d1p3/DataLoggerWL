@@ -22,6 +22,8 @@
 #include "helperFunction.h"
 #include "uart0.h"
 #include "i2c0.h"
+#include "stdio.h"
+//#include "string.h"
 
 #define MAX_CHARS 80
 char str[MAX_CHARS];
@@ -67,14 +69,76 @@ uint8_t asciiToUint8(const char str[])
 
 bool ExecuteCommand(){
     bool ok = true;
+    uint8_t i;
+    uint8_t add;
+    uint8_t reg;
+    uint8_t data;
+    //char strInput[MAX_CHARS+1];
+    char* token;
+    char str[80];
+
     if (isCommand("start",0)){
         putsUart0("All good!");
         putsUart0("\r\n");
     }
 
-    else if (isCommand("ramp",0)){
+    else if (isCommand("exit",0)){
         putsUart0("Exiting!");
         putsUart0("\r\n");
+    }
+    else if (isCommand("poll",0)){
+
+        putsUart0("Devices found: ");
+        for (i = 4; i < 119; i++)
+        {
+            if (pollI2c0Address(i))
+            {
+                sprintf(str, "0x%02x ", i);
+                putsUart0(str);
+            }
+        }
+        putsUart0("\r\n");
+    }
+    else if (isCommand("write",3)){
+        token = strtok(NULL, " ");
+        putsUart0(token);
+        ok = ok && token != NULL;
+        add = asciiToUint8(token);
+        token = strtok(NULL, " ");
+        ok = ok && token != NULL;
+        reg = asciiToUint8(token);
+        token = strtok(NULL, " \r\n");
+        ok = ok && token != NULL;
+        data = asciiToUint8(token);
+        if (ok)
+        {
+            writeI2c0Register(add, reg, data);
+            sprintf(str, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+            putsUart0(str);
+        }
+        else
+            putsUart0("Error in write command arguments\r\n");
+    }
+    else if (isCommand("read",2)){
+        token = strtok(NULL, " ");
+        ok = ok && token != NULL;
+        add = asciiToUint8(token);
+        token = strtok(NULL, " \r\n");
+        ok = ok && token != NULL;
+        reg = asciiToUint8(token);
+        if (ok)
+        {
+            data = readI2c0Register(add, reg);
+            sprintf(str, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+            putsUart0(str);
+        }
+        else
+            putsUart0("Error in read command arguments\r\n");
+    }
+    else if (isCommand("help",0)){
+        putsUart0("poll\r\n");
+        putsUart0("read ADD REG\r\n");
+        putsUart0("write ADD REG DATA\r\n");
     }
     else ok = false;
 
