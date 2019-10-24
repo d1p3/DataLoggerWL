@@ -30,5 +30,6 @@ void initUart0();
 void putcUart0(char c);
 void putsUart0(char* str);
 char getcUart0();
+int16_t readAdc0Ss3();
 
 #endif

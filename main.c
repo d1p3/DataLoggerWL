@@ -23,7 +23,6 @@
 #include "uart0.h"
 #include "i2c0.h"
 #include "stdio.h"
-//#include "string.h"
 
 #define MAX_CHARS 80
 char str[MAX_CHARS];
@@ -73,7 +72,8 @@ bool ExecuteCommand(){
     uint8_t add;
     uint8_t reg;
     uint8_t data;
-    //char strInput[MAX_CHARS+1];
+    uint16_t raw;
+    float instantTemp;
     char* token;
     char str[80];
 
@@ -139,6 +139,16 @@ bool ExecuteCommand(){
         putsUart0("poll\r\n");
         putsUart0("read ADD REG\r\n");
         putsUart0("write ADD REG DATA\r\n");
+    }
+    else if (isCommand("temp",0)){
+        raw = readAdc0Ss3();
+        instantTemp = ((raw / 4096.0 * 3.3) - 0.424) / 0.00625;
+        // display raw ADC value and temperatures
+        sprintf(str, "Raw ADC:        %u\r\n", raw);
+        putsUart0(str);
+        sprintf(str, "Unfiltered (C): %.1f\r\n", instantTemp);
+        putsUart0(str);
+        putsUart0("\r\n");
     }
     else ok = false;
 

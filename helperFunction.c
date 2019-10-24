@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "helperFunction.h"
+#include <stdlib.h>
+#include <string.h>
 
 //global variables
 #define MAX_CHARS 80
