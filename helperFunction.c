@@ -54,6 +54,15 @@ void tokenizeString()
     }
 }
 
+char *getString(uint8_t argN){
+    return &str[pos[argN+1]];
+}
+
+// Return the numerical value of argument
+uint16_t getValue(uint8_t argN){
+    return atoi(getString(argN));
+}
+
 // Check valid command
 bool isCommand(char *cmd, uint8_t min){
     if (count > min){
