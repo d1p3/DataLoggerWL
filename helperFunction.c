@@ -48,7 +48,7 @@ void tokenizeString()
             else if (p=='d' && c=='n'){         //transition from delimeter to number
                 pos[count]=i;
                 count++;
-            }
+            }   
         }
         p = c;
     }

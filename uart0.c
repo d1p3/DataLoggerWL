@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include "tm4c123gh6pm.h"
 #include "uart0.h"
+#include "tm4c123gh6pm.h"
 
 // PortA masks
 #define UART_TX_MASK 2
@@ -47,7 +48,7 @@ void initUart0()
 
     // Enable clocks
     SYSCTL_RCGCUART_R |= SYSCTL_RCGCUART_R0;
-    SYSCTL_RCGC2_R |= SYSCTL_RCGC2_GPIOA;
+    SYSCTL_RCGC2_R = SYSCTL_RCGC2_GPIOA | SYSCTL_RCGC2_GPIOE;
 
     // Configure UART0 pins
     GPIO_PORTA_DIR_R |= UART_TX_MASK;                   // enable output on UART0 TX pin
@@ -67,6 +68,24 @@ void initUart0()
     UART0_LCRH_R = UART_LCRH_WLEN_8 | UART_LCRH_FEN;    // configure for 8N1 w/ 16-level FIFO
     UART0_CTL_R = UART_CTL_TXE | UART_CTL_RXE | UART_CTL_UARTEN;
                                                         // enable TX, RX, and module
+
+    //Analog UART--------------------------------------------------------------------------
+                                                     // turn on GPIO ports A and E
+    SYSCTL_RCGCADC_R |= 1;                           // turn on ADC module 0 clocking
+    SYSCTL_RCGCUART_R |= SYSCTL_RCGCUART_R0;         // turn-on UART0, leave other UARTs in same status
+
+    // Configure AN0 as an analog input
+	GPIO_PORTE_AFSEL_R |= 0x08;                      // select alternative functions for AN0 (PE3)
+    GPIO_PORTE_DEN_R &= ~0x08;                       // turn off digital operation on pin PE3
+    GPIO_PORTE_AMSEL_R |= 0x08;                      // turn on analog operation on pin PE3
+
+    // Configure ADC
+    ADC0_CC_R = ADC_CC_CS_SYSPLL;                    // select PLL as the time base (not needed, since default value)
+    ADC0_ACTSS_R &= ~ADC_ACTSS_ASEN3;                // disable sample sequencer 3 (SS3) for programming
+    ADC0_EMUX_R = ADC_EMUX_EM3_PROCESSOR;            // select SS3 bit in ADCPSSI as trigger
+    ADC0_SSMUX3_R = 0;                               // set first sample to AN0
+    ADC0_SSCTL3_R = ADC_SSCTL3_END0;                 // mark first sample as the end
+    ADC0_ACTSS_R |= ADC_ACTSS_ASEN3;                 // enable SS3 for operation
 }
 
 // Blocking function that writes a serial character when the UART buffer is not full
@@ -89,4 +108,11 @@ char getcUart0()
 {
     while (UART0_FR_R & UART_FR_RXFE);               // wait if uart0 rx fifo empty
     return UART0_DR_R & 0xFF;                        // get character from fifo
+}
+
+int16_t readAdc0Ss3()
+{
+    ADC0_PSSI_R |= ADC_PSSI_SS3;                     // set start bit
+    while (ADC0_ACTSS_R & ADC_ACTSS_BUSY);           // wait until SS3 is not busy
+    return ADC0_SSFIFO3_R;                           // get single result from the FIFO
 }
