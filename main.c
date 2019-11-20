@@ -15,6 +15,7 @@
 // Device includes, defines, and assembler directives
 //-----------------------------------------------------------------------------
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
@@ -22,7 +23,7 @@
 #include "helperFunction.h"
 #include "uart0.h"
 #include "i2c0.h"
-#include "stdio.h"
+//#include "string.h"
 
 #define MAX_CHARS 80
 char str[MAX_CHARS];
@@ -68,18 +69,18 @@ uint8_t asciiToUint8(const char str[])
 
 bool ExecuteCommand(){
     bool ok = true;
+    char str1[80];
     uint8_t i;
     uint8_t add;
     uint8_t reg;
     uint8_t data;
-    uint16_t raw;
-    float instantTemp;
+    //char strInput[MAX_CHARS+1];
     char* token;
-    char str[80];
-
     if (isCommand("start",0)){
         putsUart0("All good!");
         putsUart0("\r\n");
+        sprintf(str1, "%d ",1);
+        putsUart0(str1);
     }
 
     else if (isCommand("exit",0)){
@@ -93,8 +94,11 @@ bool ExecuteCommand(){
         {
             if (pollI2c0Address(i))
             {
-                sprintf(str, "0x%02x ", i);
-                putsUart0(str);
+                //ltoa(i,str1);
+                //putsUart0(str1);
+                //putsUart0("\r\n");
+                sprintf(str1,"%x",i);
+                putsUart0(str1);
             }
         }
         putsUart0("\r\n");
@@ -113,8 +117,8 @@ bool ExecuteCommand(){
         if (ok)
         {
             writeI2c0Register(add, reg, data);
-            sprintf(str, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-            putsUart0(str);
+            sprintf(str1, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+            putsUart0(str1);
         }
         else
             putsUart0("Error in write command arguments\r\n");
@@ -129,26 +133,39 @@ bool ExecuteCommand(){
         if (ok)
         {
             data = readI2c0Register(add, reg);
-            sprintf(str, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-            putsUart0(str);
+            sprintf(str1, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+            putsUart0(str1);
         }
         else
             putsUart0("Error in read command arguments\r\n");
     }
+    else if (isCommand("temp",0)){
+        uint16_t raw;
+        float instantTemp;
+        putsUart0("Temp\r\n");
+        raw = readAdc0Ss3();
+        // Calculate temperature in degC as follows:
+        //   For the 12-bit SAR ADC with Vref+ = 3.3V and Vref- = 0V, outputing a result R:
+        //   Resolution is approx 0.81mV / LSb or 0.13 degC / LSb
+        //   R(Vin) = floor(Vin/3.3V * 4096) -> Vin(R) ~= 3.3V * ((R+0.5) / 4096)
+        //   (~ and 0.5LSb offset in Vin(R) equation are introduced for mid-tread value of the SAR transfer function)
+        //   T(Vin) = (Vin - 0.424V) / 0.00625V
+        //   T(R) ~= ([3.3V * ((R+0.5) / 4096)] - 0.424V) / 0.00625V
+        //   T(R) ~= (0.12890625 * R) - 67.775546875 (simplified floating point equation to save cycles)
+        instantTemp = ((raw / 4096.0 * 3.3) - 0.424) / 0.00625;
+
+        // display raw ADC value and temperatures
+        sprintf(str1, "Raw ADC:        %u\r\n", raw);
+        putsUart0(str1);
+        sprintf(str1, "Unfiltered (C): %3.1f\r\n", instantTemp);
+        putsUart0(str1);
+        putsUart0("\r\n");
+    }
+
     else if (isCommand("help",0)){
         putsUart0("poll\r\n");
         putsUart0("read ADD REG\r\n");
         putsUart0("write ADD REG DATA\r\n");
-    }
-    else if (isCommand("temp",0)){
-        raw = readAdc0Ss3();
-        instantTemp = ((raw / 4096.0 * 3.3) - 0.424) / 0.00625;
-        // display raw ADC value and temperatures
-        sprintf(str, "Raw ADC:        %u\r\n", raw);
-        putsUart0(str);
-        sprintf(str, "Unfiltered (C): %.1f\r\n", instantTemp);
-        putsUart0(str);
-        putsUart0("\r\n");
     }
     else ok = false;
 

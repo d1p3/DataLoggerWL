@@ -9,10 +9,11 @@
 // Device includes, defines, and assembler directives
 //-----------------------------------------------------------------------------
 #include <stdint.h>
-#include <stdbool.h>
-#include "helperFunction.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
+#include "helperFunction.h"
 
 //global variables
 #define MAX_CHARS 80

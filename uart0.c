@@ -23,8 +23,6 @@
 #include <stdbool.h>
 #include "tm4c123gh6pm.h"
 #include "uart0.h"
-#include "tm4c123gh6pm.h"
-
 // PortA masks
 #define UART_TX_MASK 2
 #define UART_RX_MASK 1
