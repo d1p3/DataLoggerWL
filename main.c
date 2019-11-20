@@ -16,6 +16,7 @@
 //-----------------------------------------------------------------------------
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
@@ -27,6 +28,12 @@
 
 #define MAX_CHARS 80
 char str[MAX_CHARS];
+#define MAX_CHARS 80
+#define MAX_FIELDS 2
+uint16_t hour, min, sec, month, day, year;
+char str[MAX_CHARS];
+uint8_t pos[MAX_FIELDS];
+uint8_t count = 0;
 // Initialize Hardware
 void initHw()
 {
@@ -56,7 +63,60 @@ void getsUart0(char str[], uint8_t size)
     }
     str[count] = '\0';
 }
+// Tokenize Input string by replacing delimeter with null character and add position, type and field count
+void tokenizeString()
+{
+    count = 0;
+    int i;
+    int N = strlen(str);//Length of the input
+    char p ='d';//previous
+    char c;//current
+    for (i = 0; i < N; i++){
+        char c = str[i];
+        if (c>='a' && c<='z') //if c is alphabet (a-z)
+            c='a';
+        else if (c>='0' && c<='9') //if c is number (0-9)
+            c='n';
+        else{
+            c='d';
+            str[i]=0;
+        }
+        if (p != c){
+            if (p=='d' && c=='a'){      //transition from delimeter to alpha
+                pos[count]=i;
+                count++;
+            }
+            else if (p=='d' && c=='n'){         //transition from delimeter to number
+                pos[count]=i;
+                count++;
+            }
+        }
+        p = c;
+    }
+}
 
+char *getString(uint8_t argN){
+    return &str[pos[argN+1]];
+}
+
+// Return the numerical value of argument
+uint16_t getValue(uint8_t argN){
+    return atoi(getString(argN));
+}
+
+// Check valid command
+bool isCommand(char *cmd, uint8_t min){
+    if (count > min){
+        int i;
+        for(i = 0; i < strlen(cmd); i++){
+            if (cmd[i] != str[pos[0]+i])
+                return false;
+        }
+        return true;
+    }
+    else
+        return false;
+}
 uint8_t asciiToUint8(const char str[])
 {
     uint8_t data;
@@ -79,8 +139,6 @@ bool ExecuteCommand(){
     if (isCommand("start",0)){
         putsUart0("All good!");
         putsUart0("\r\n");
-        sprintf(str1, "%d ",1);
-        putsUart0(str1);
     }
 
     else if (isCommand("exit",0)){
@@ -94,51 +152,46 @@ bool ExecuteCommand(){
         {
             if (pollI2c0Address(i))
             {
-                //ltoa(i,str1);
-                //putsUart0(str1);
-                //putsUart0("\r\n");
-                sprintf(str1,"%x",i);
+                ltoa(i,str1);
                 putsUart0(str1);
+                putsUart0("\r\n");
+                //sprintf(str1,"%x",i);
+                //putsUart0(str1);
             }
         }
         putsUart0("\r\n");
     }
     else if (isCommand("write",3)){
-        token = strtok(NULL, " ");
-        putsUart0(token);
-        ok = ok && token != NULL;
-        add = asciiToUint8(token);
-        token = strtok(NULL, " ");
-        ok = ok && token != NULL;
-        reg = asciiToUint8(token);
-        token = strtok(NULL, " \r\n");
-        ok = ok && token != NULL;
-        data = asciiToUint8(token);
-        if (ok)
-        {
-            writeI2c0Register(add, reg, data);
-            sprintf(str1, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-            putsUart0(str1);
-        }
-        else
-            putsUart0("Error in write command arguments\r\n");
+        add = getValue(0);
+        reg = getValue(1);
+        data = getValue(2);
+        writeI2c0Register(add, reg, data);
+        //sprintf(str1, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+        //putsUart0(str1);
     }
     else if (isCommand("read",2)){
-        token = strtok(NULL, " ");
-        ok = ok && token != NULL;
-        add = asciiToUint8(token);
-        token = strtok(NULL, " \r\n");
-        ok = ok && token != NULL;
-        reg = asciiToUint8(token);
-        if (ok)
-        {
-            data = readI2c0Register(add, reg);
-            sprintf(str1, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-            putsUart0(str1);
-        }
-        else
-            putsUart0("Error in read command arguments\r\n");
+        add = getValue(0);
+        reg = getValue(1);
+        data = readI2c0Register(add, reg);
+        //sprintf(str1, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
+        //putsUart0(str1);
     }
+    else if (isCommand("settime",3)){
+          hour = getValue(0);
+          min = getValue(1);
+          sec = getValue(2);
+      }
+    else if (isCommand("time",0)){
+        putsUart0("Time");
+      }
+    else if (isCommand("setdate",3)){
+          month = getValue(0);
+          day = getValue(1);
+          year = getValue(2);
+      }
+    else if (isCommand("date",0)){
+        putsUart0("Time");
+      }
     else if (isCommand("temp",0)){
         uint16_t raw;
         float instantTemp;
@@ -183,6 +236,7 @@ int main(void)
     initI2c0();
 
     putsUart0("Data Logger Ready!");
+    putsUart0("\r\n");
     putsUart0("Enter Command:");
     putsUart0("\r\n");
     while(1){
