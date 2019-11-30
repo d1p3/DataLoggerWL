@@ -12,7 +12,6 @@
 //-----------------------------------------------------------------------------
 
 void initRTC();
-void setPeriodicMode();
-void HibernateISRHandler();
+void hibernateISRHandler();
 
 #endif /* RTC_H_ */

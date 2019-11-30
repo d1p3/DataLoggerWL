@@ -53,18 +53,6 @@ void initI2c0()
     I2C0_MTPR_R = 19;                                   // (40MHz/2) / (19+1) = 100kbps
 }
 
-void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data)
-{
-    I2C0_MSA_R = add*2;
-    I2C0_MDR_R = reg;
-    I2C0_MICR_R = I2C_MICR_IC;
-    I2C0_MCS_R = I2C_MCS_START | I2C_MCS_RUN;
-    while ((I2C0_MRIS_R & I2C_MRIS_RIS) == 0);
-    I2C0_MDR_R = data;
-    I2C0_MICR_R = I2C_MICR_IC;
-    I2C0_MCS_R = I2C_MCS_STOP | I2C_MCS_RUN;
-    while (!(I2C0_MRIS_R & I2C_MRIS_RIS));
-}
 
 void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size)
 {
@@ -96,6 +84,20 @@ void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size)
     }
 }
 
+void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data)
+{
+    I2C0_MSA_R = add*2;
+    I2C0_MDR_R = reg;
+    I2C0_MICR_R = I2C_MICR_IC;
+    I2C0_MCS_R = I2C_MCS_START | I2C_MCS_RUN;
+    while ((I2C0_MRIS_R & I2C_MRIS_RIS) == 0);
+    I2C0_MDR_R = data;
+    I2C0_MICR_R = I2C_MICR_IC;
+    I2C0_MCS_R = I2C_MCS_STOP | I2C_MCS_RUN;
+    while (!(I2C0_MRIS_R & I2C_MRIS_RIS));
+}
+
+
 uint8_t readI2c0Register(uint8_t add, uint8_t reg)
 {
     I2C0_MSA_R = add*2;
@@ -123,4 +125,5 @@ bool isI2c0Error()
 {
     return !(I2C0_MCS_R & I2C_MCS_ERROR);
 }
+
 
