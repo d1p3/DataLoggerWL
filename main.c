@@ -56,12 +56,12 @@
 #define GYRO_ZOUT_H      0x47
 #define GYRO_ZOUT_L      0x48
 
-#define COMPASS_XOUT_H      0x03
-#define COMPASS_XOUT_L      0x04
-#define COMPASS_YOUT_H      0x05
-#define COMPASS_YOUT_L      0x06
-#define COMPASS_ZOUT_H      0x07
-#define COMPASS_ZOUT_L      0x08
+#define COMPASS_XOUT_H      0x0D
+#define COMPASS_XOUT_L      0x0E
+#define COMPASS_YOUT_H      0x4B
+#define COMPASS_YOUT_L      0x4C
+#define COMPASS_ZOUT_H      0x4D
+#define COMPASS_ZOUT_L      0x4E
 
 float selfTest[6];// holds results of gyro and accelerometer self test
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +75,16 @@ uint32_t rtcD,rtcT;
 char str[MAX_CHARS];
 uint8_t pos[MAX_FIELDS];
 uint8_t count = 0;
+uint8_t raw_accel[6];
+int16_t accel[3];
+int16_t acceleration[3];
+uint8_t raw_gyro[6];
+int16_t deg[3];
+int16_t degrees[3];
+uint8_t raw_compass[6];
+int16_t comp[3];
+int16_t compass[3];
+
 // Initialize Hardware
 void initHw()
 {
@@ -255,19 +265,22 @@ bool ExecuteCommand(){
     }
 
     else if (isCommand("accel",0)){
-        sprintf(str1,"accel: %d\r\n", accel());
+        MPU9250_Accelerometer();
+        sprintf(str1,"accelx: %d, accely: %d, accelz: %d\r\n", acceleration[0],acceleration[1],acceleration[2]);
         putsUart0(str1);
         putsUart0("\r\n");
     }
 
     else if (isCommand("gyro",0)){
-        sprintf(str1,"gyro: %02d\r\n", gyro());
+        MPU9250_Gyroscope();
+        sprintf(str1,"gyrox: %d, gyroy: %d, gyroz: %d\r\n", degrees[0],degrees[1],degrees[2]);
         putsUart0(str1);
         putsUart0("\r\n");
     }
 
     else if (isCommand("compass",0)){
-        sprintf(str1,"compass: %02d\r\n", compass());
+        MPU9250_Compass();
+        sprintf(str1,"Compassx: %d, Compassy: %d, Compassz: %d\r\n", compass[0],compass[1],compass[2]);
         putsUart0(str1);
         putsUart0("\r\n");
     }
@@ -297,6 +310,11 @@ bool ExecuteCommand(){
     else if (isCommand("samples",1)){
 
     }
+
+    else if (isCommand("stop",1)){
+        stop();
+        putsUart0("Done!");
+     }
 
 
     else if (isCommand("help",0)){
@@ -333,34 +351,73 @@ uint16_t temp()
     return raw;
 }
 
-uint16_t compass()
+void MPU_ReadMagnetometer()
 {
-    uint8_t x = readI2c0Register(COMPASS_ADDRESS,COMPASS_XOUT_H);
-    uint8_t y = readI2c0Register(COMPASS_ADDRESS,COMPASS_YOUT_H);
-    uint8_t z = readI2c0Register(COMPASS_ADDRESS,COMPASS_ZOUT_H);
-    float raw = x*x+y*y+z*z;
-    uint16_t raw1 = (uint16_t)sqrtf(raw);
-    return raw1;
+    raw_compass[0] = readI2c0Register(COMPASS_ADDRESS,COMPASS_XOUT_H);
+    raw_compass[1] = readI2c0Register(COMPASS_ADDRESS,COMPASS_XOUT_L);
+    raw_compass[2] = readI2c0Register(COMPASS_ADDRESS,COMPASS_YOUT_H);
+    raw_compass[3] = readI2c0Register(COMPASS_ADDRESS,COMPASS_YOUT_L);
+    raw_compass[4] = readI2c0Register(COMPASS_ADDRESS,COMPASS_ZOUT_H);
+    raw_compass[5] = readI2c0Register(COMPASS_ADDRESS,COMPASS_ZOUT_L);
+
 }
 
-uint16_t accel()
+void MPU_ReadAccelerometer()
 {
-    uint8_t x = readI2c0Register(MPU9250_ADDRESS,ACCEL_XOUT_H);
-    uint8_t y = readI2c0Register(MPU9250_ADDRESS,ACCEL_YOUT_H);
-    uint8_t z = readI2c0Register(MPU9250_ADDRESS,ACCEL_ZOUT_H);
-    float raw = x*x+y*y+z*z;
-    uint16_t raw1 = (uint16_t)sqrtf(raw);
-    return raw1;
+    raw_accel[0] = readI2c0Register(MPU9250_ADDRESS,ACCEL_XOUT_H);
+    raw_accel[1] = readI2c0Register(MPU9250_ADDRESS,ACCEL_XOUT_L);
+    raw_accel[2] = readI2c0Register(MPU9250_ADDRESS,ACCEL_YOUT_H);
+    raw_accel[3] = readI2c0Register(MPU9250_ADDRESS,ACCEL_YOUT_L);
+    raw_accel[4] = readI2c0Register(MPU9250_ADDRESS,ACCEL_ZOUT_H);
+    raw_accel[5] = readI2c0Register(MPU9250_ADDRESS,ACCEL_ZOUT_L);
 }
 
-uint16_t gyro()
+void MPU_ReadGyroscope()
 {
-    uint8_t x = readI2c0Register(MPU9250_ADDRESS,GYRO_XOUT_H);
-    uint8_t y = readI2c0Register(MPU9250_ADDRESS,GYRO_YOUT_H);
-    uint8_t z = readI2c0Register(MPU9250_ADDRESS,GYRO_ZOUT_H);
-    float raw = x*x+y*y+z*z;
-    uint16_t raw1 = (uint16_t)sqrtf(raw);
-    return raw1;
+    raw_gyro[0] = readI2c0Register(MPU9250_ADDRESS,GYRO_XOUT_H);
+    raw_gyro[1] = readI2c0Register(MPU9250_ADDRESS,GYRO_XOUT_L);
+    raw_gyro[2] = readI2c0Register(MPU9250_ADDRESS,GYRO_YOUT_H);
+    raw_gyro[3] = readI2c0Register(MPU9250_ADDRESS,GYRO_YOUT_L);
+    raw_gyro[4] = readI2c0Register(MPU9250_ADDRESS,GYRO_ZOUT_H);
+    raw_gyro[5] = readI2c0Register(MPU9250_ADDRESS,GYRO_ZOUT_L);
+}
+
+void MPU9250_Accelerometer(){
+    MPU_ReadAccelerometer();
+    accel[0] = (raw_accel[0] << 8) | raw_accel[1];
+    accel[1] = (raw_accel[2] << 8) | raw_accel[3];
+    accel[2] = (raw_accel[4] << 8) | raw_accel[5];
+
+    acceleration[0] = (float)(2 * accel[0])/32768;
+    acceleration[1] = (float)(2 * accel[1])/32768;
+    acceleration[2] = (float)(2 * accel[2])/32768;
+}
+
+void MPU9250_Gyroscope(){
+    MPU_ReadGyroscope();
+
+    deg[0] = (raw_gyro[0] << 8) | raw_gyro[1];
+    deg[1] = (raw_gyro[2] << 8) | raw_gyro[3];
+    deg[2] = (raw_gyro[4] << 8) | raw_gyro[5];
+
+    degrees[0] = (float)(250 * deg[0])/32768.0;
+    degrees[1] = (float)(250 * deg[1])/32768.0;
+    degrees[2] = (float)(250 * deg[2])/32768.0;
+}
+
+void MPU9250_Compass(){
+    MPU_ReadMagnetometer();
+    comp[0] = (raw_compass[0] << 8) | raw_compass[1];
+    comp[1] = (raw_compass[2] << 8) | raw_compass[3];
+    comp[2] = (raw_compass[4] << 8) | raw_compass[5];
+
+    compass[0] = (float)(10 *4912 * comp[0])/32760;
+    compass[1] = (float)(10 *4912 * comp[1])/32760;
+    compass[2] = (float)(10 *4812 * comp[2])/32760;
+}
+void stop()
+{
+
 }
 //-----------------------------------------------------------------------------
 // Main
