@@ -25,65 +25,31 @@
 #include "uart0.h"
 #include "i2c0.h"
 #include "rtc.h"
+#include "MPU9250.h"
 //#include "string.h"
 
-//Sensor related definitations//////////////////////////////////////////////////////
-#define MPU9250_ADDRESS 0x68  // Device address when ADO = 0
-#define COMPASS_ADDRESS 0x0C   //  Address of magnetometer
 
-#define SELF_TEST_X_GYRO 0x00
-#define SELF_TEST_Y_GYRO 0x01
-#define SELF_TEST_Z_GYRO 0x02
 
-#define SELF_TEST_X_ACCEL 0x0D
-#define SELF_TEST_Y_ACCEL 0x0E
-#define SELF_TEST_Z_ACCEL 0x0F
-
-#define GYRO_CONFIG 0x1B
-#define ACCEL_CONFIG 0x1C
-
-#define ACCEL_XOUT_H     0x3B
-#define ACCEL_XOUT_L     0x3C
-#define ACCEL_YOUT_H     0x3D
-#define ACCEL_YOUT_L     0x3E
-#define ACCEL_ZOUT_H     0x3F
-#define ACCEL_ZOUT_L     0x40
-
-#define GYRO_XOUT_H      0x43
-#define GYRO_XOUT_L      0x44
-#define GYRO_YOUT_H      0x45
-#define GYRO_YOUT_L      0x46
-#define GYRO_ZOUT_H      0x47
-#define GYRO_ZOUT_L      0x48
-
-#define COMPASS_XOUT_H      0x0D
-#define COMPASS_XOUT_L      0x0E
-#define COMPASS_YOUT_H      0x4B
-#define COMPASS_YOUT_L      0x4C
-#define COMPASS_ZOUT_H      0x4D
-#define COMPASS_ZOUT_L      0x4E
-
-float selfTest[6];// holds results of gyro and accelerometer self test
-////////////////////////////////////////////////////////////////////////////////////////
 
 #define MAX_CHARS 80
 char str[MAX_CHARS];
 #define MAX_CHARS 80
 #define MAX_FIELDS 2
-uint32_t hour, min, sec, month, day, year;
+uint8_t hour, min, sec, month, day;
 uint32_t rtcD,rtcT;
 char str[MAX_CHARS];
 uint8_t pos[MAX_FIELDS];
 uint8_t count = 0;
-uint8_t raw_accel[6];
-int16_t accel[3];
-int16_t acceleration[3];
-uint8_t raw_gyro[6];
-int16_t deg[3];
-int16_t degrees[3];
-uint8_t raw_compass[6];
-int16_t comp[3];
-int16_t compass[3];
+
+typedef struct _DateTime {
+    uint8_t month;
+    uint8_t day;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+} DateTime;
+
+uint8_t monthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 // Initialize Hardware
 void initHw()
@@ -232,43 +198,71 @@ bool ExecuteCommand(){
           min = getValue(1);
           sec = getValue(2);
           rtcT = HIB_RTCC_R;
-          sprintf(str1, "\r\n Time set to hh = %d, mm = %d, ss = %d, rtcVal = %02f\r\n",hour,min, sec,(float)hour*3600 + min*60 + sec);
-          putsUart0(str1);
       }
+
     else if (isCommand("time",0)){
         //uint32_t setTime = hour*3600 + min*60 + sec;
         uint32_t dT = HIB_RTCC_R - rtcT;
-        sprintf(str1, "\r\nTime = %d secs\r\n",dT);
+        uint32_t hh = (uint32_t) dT / 3600;
+        uint32_t remainder = (uint32_t) dT - hh * 3600;
+        uint32_t mm = remainder / 60;
+        remainder = remainder - mm * 60;
+        uint32_t ss = remainder;
+        sprintf(str1, "\r\nhh:mm:ss = %d:%d:%d \r\n",hh + hour ,mm + min, ss+ sec);
         putsUart0(str1);
       }
 
-    else if (isCommand("date",3)){
+    else if (isCommand("date",2)){
           month = getValue(0);
           day = getValue(1);
-          year = getValue(2);
-          rtcD = HIB_RTCC_R;
-          sprintf(str1, "\r\n Date set to mm = %d, dd = %d, yy = %d, rtcVal = %.2f\r\n",month,day,year,(float)(year*365*24*60*60)+(float)(month*30*24*60*60)+(day*24*60*60));
-          putsUart0(str1);
       }
 
     else if (isCommand("date",0)){
-        uint32_t dT = HIB_RTCC_R-rtcD;
         //float setDate = (float)(year*365*24*60*60)+(float)(month*30*24*60*60)+(day*24*60*60);
-        sprintf(str1, "\r\nDate = %.2f secs\r\n",(float)dT);
+        int8_t deltaT = HIB_RTCC_R - rtcT;
+        int8_t hh = (uint32_t) deltaT / 3600;
+        int8_t remainder = (uint32_t) deltaT - hh * 3600;
+        int8_t mm = remainder / 60;
+        remainder = remainder - mm * 60;
+        uint8_t ss = remainder;
+
+        int8_t i;
+        int8_t days_in_month;
+        int8_t n_month = 0;
+        int8_t n_day= 0;
+
+        if((hh+hour) >= 24){
+            n_day = day + (int8_t)((hh+hour)/24);
+            mm = min + (hh+hour) % 24;
+        }
+
+        DateTime dt;
+        if(n_day >= 28){
+            for(i=0;i<12;i++){
+                days_in_month = monthDays[i];
+                if(month == 0)
+                    break;
+                if(i==month-1){
+                    break;
+                }
+            }
+            n_month = (int8_t)n_day/days_in_month;
+            n_day = n_day % days_in_month;
+        }
+
+        sprintf(str1, "\r\nmonth/day = %d/%d   hh:mm:ss = %d:%d:%d \r\n", n_month + month , n_day + day , hh + hour , mm + min, ss + sec);
         putsUart0(str1);
       }
 
     else if (isCommand("temp",0)){
-        sprintf(str1,"Temperature: %02d\r\n", temp());
+        sprintf(str1,"Temperature: %3.1f\r\n", temp());
         putsUart0(str1);
         putsUart0("\r\n");
     }
 
     else if (isCommand("accel",0)){
-        MPU9250_Accelerometer();
-        sprintf(str1,"accelx: %d, accely: %d, accelz: %d\r\n", acceleration[0],acceleration[1],acceleration[2]);
-        putsUart0(str1);
-        putsUart0("\r\n");
+        char * str2 = (char*)accel();
+        putsUart0(str2);
     }
 
     else if (isCommand("gyro",0)){
@@ -283,6 +277,12 @@ bool ExecuteCommand(){
         sprintf(str1,"Compassx: %d, Compassy: %d, Compassz: %d\r\n", compass[0],compass[1],compass[2]);
         putsUart0(str1);
         putsUart0("\r\n");
+    }
+
+    else if (isCommand("periodic",1)){
+        interval = getValue(0);
+        setPeriodicMode();
+        putsUart0("Periodic mode set!");
     }
 
     else if (isCommand("log",1)){
@@ -308,14 +308,16 @@ bool ExecuteCommand(){
     }
 
     else if (isCommand("samples",1)){
-
+        sample_set = getValue(0);
     }
 
     else if (isCommand("stop",1)){
         stop();
+        interval = 60;
+        sprintf(str1, "\r\nInterval = %d \r\n",interval);
+        putsUart0(str1);
         putsUart0("Done!");
      }
-
 
     else if (isCommand("help",0)){
         putsUart0("poll\r\n");
@@ -332,92 +334,17 @@ bool ExecuteCommand(){
     return ok;
 }
 
-
-void test()
-{
-    selfTest[0] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_X_ACCEL); // X-axis accel self-test results
-    selfTest[1] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_Y_ACCEL); // Y-axis accel self-test results
-    selfTest[2] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_Z_ACCEL); // Z-axis accel self-test results
-
-    selfTest[3] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_X_GYRO);  // X-axis gyro self-test results
-    selfTest[4] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_Y_GYRO);  // Y-axis gyro self-test results
-    selfTest[5] = readI2c0Register(MPU9250_ADDRESS, SELF_TEST_Z_GYRO);  // Z-axis gyro self-test results
-}
-
-uint16_t temp()
-{
-    uint16_t raw;
-    raw = readAdc0Ss3();
-    return raw;
-}
-
-void MPU_ReadMagnetometer()
-{
-    raw_compass[0] = readI2c0Register(COMPASS_ADDRESS,COMPASS_XOUT_H);
-    raw_compass[1] = readI2c0Register(COMPASS_ADDRESS,COMPASS_XOUT_L);
-    raw_compass[2] = readI2c0Register(COMPASS_ADDRESS,COMPASS_YOUT_H);
-    raw_compass[3] = readI2c0Register(COMPASS_ADDRESS,COMPASS_YOUT_L);
-    raw_compass[4] = readI2c0Register(COMPASS_ADDRESS,COMPASS_ZOUT_H);
-    raw_compass[5] = readI2c0Register(COMPASS_ADDRESS,COMPASS_ZOUT_L);
-
-}
-
-void MPU_ReadAccelerometer()
-{
-    raw_accel[0] = readI2c0Register(MPU9250_ADDRESS,ACCEL_XOUT_H);
-    raw_accel[1] = readI2c0Register(MPU9250_ADDRESS,ACCEL_XOUT_L);
-    raw_accel[2] = readI2c0Register(MPU9250_ADDRESS,ACCEL_YOUT_H);
-    raw_accel[3] = readI2c0Register(MPU9250_ADDRESS,ACCEL_YOUT_L);
-    raw_accel[4] = readI2c0Register(MPU9250_ADDRESS,ACCEL_ZOUT_H);
-    raw_accel[5] = readI2c0Register(MPU9250_ADDRESS,ACCEL_ZOUT_L);
-}
-
-void MPU_ReadGyroscope()
-{
-    raw_gyro[0] = readI2c0Register(MPU9250_ADDRESS,GYRO_XOUT_H);
-    raw_gyro[1] = readI2c0Register(MPU9250_ADDRESS,GYRO_XOUT_L);
-    raw_gyro[2] = readI2c0Register(MPU9250_ADDRESS,GYRO_YOUT_H);
-    raw_gyro[3] = readI2c0Register(MPU9250_ADDRESS,GYRO_YOUT_L);
-    raw_gyro[4] = readI2c0Register(MPU9250_ADDRESS,GYRO_ZOUT_H);
-    raw_gyro[5] = readI2c0Register(MPU9250_ADDRESS,GYRO_ZOUT_L);
-}
-
-void MPU9250_Accelerometer(){
-    MPU_ReadAccelerometer();
-    accel[0] = (raw_accel[0] << 8) | raw_accel[1];
-    accel[1] = (raw_accel[2] << 8) | raw_accel[3];
-    accel[2] = (raw_accel[4] << 8) | raw_accel[5];
-
-    acceleration[0] = (float)(2 * accel[0])/32768;
-    acceleration[1] = (float)(2 * accel[1])/32768;
-    acceleration[2] = (float)(2 * accel[2])/32768;
-}
-
-void MPU9250_Gyroscope(){
-    MPU_ReadGyroscope();
-
-    deg[0] = (raw_gyro[0] << 8) | raw_gyro[1];
-    deg[1] = (raw_gyro[2] << 8) | raw_gyro[3];
-    deg[2] = (raw_gyro[4] << 8) | raw_gyro[5];
-
-    degrees[0] = (float)(250 * deg[0])/32768.0;
-    degrees[1] = (float)(250 * deg[1])/32768.0;
-    degrees[2] = (float)(250 * deg[2])/32768.0;
-}
-
-void MPU9250_Compass(){
-    MPU_ReadMagnetometer();
-    comp[0] = (raw_compass[0] << 8) | raw_compass[1];
-    comp[1] = (raw_compass[2] << 8) | raw_compass[3];
-    comp[2] = (raw_compass[4] << 8) | raw_compass[5];
-
-    compass[0] = (float)(10 *4912 * comp[0])/32760;
-    compass[1] = (float)(10 *4912 * comp[1])/32760;
-    compass[2] = (float)(10 *4812 * comp[2])/32760;
-}
 void stop()
 {
+    batteryBackedRAM();
 
+}
+
+char* accel(){
+    char str1[32];
+    MPU9250_Accelerometer();
+    sprintf(str1,"x:%.2f,y:%.2f,z:%.2f,d:%d,t:%d\r\n", acceleration[0],acceleration[1],acceleration[2],HIB_RTCC_R-rtcD,HIB_RTCC_R-rtcT);
+    return str1;
 }
 //-----------------------------------------------------------------------------
 // Main

@@ -27,18 +27,29 @@
 #include "tm4c123gh6pm.h"
 #include "rtc.h"
 
-void initRTC()
-{
+#define HIB_DATA_0          ((volatile unsigned long *)0x400FC030)
+void initRTC(){
     HIB_CTL_R |= 0x41;
+    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32); // Enable Interrupts
 }
 
-void HibernateISRHandler()
-{
+void setPeriodicMode(){
+    stop();
+    HIB_RTCM0_R = HIB_RTCC_R + floor(interval/1000);
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+    HIB_RTCSS_R = (uint16_t)(interval%1000)*32768/1000 << HIB_RTCSS_RTCSSM_S;
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+    HIB_IM_R |= HIB_IM_RTCALT0;
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+    HIB_RTCT_R = 0x7FFF;
+    while (!(HIB_CTL_R & HIB_CTL_WRC));
+    HIB_RTCLD_R = HIB_RTCC_R;
+}
+
+void hibernateISRHandler(){
     char str[80];
     uint32_t status = HIB_MIS_R;
-    uint32_t sample_count = 0;
-    uint32_t sample_set =0;
-    uint32_t interval =0;
+
     while (!(HIB_CTL_R & HIB_CTL_WRC));
 
     if (status && HIB_MIS_RTCALT0){ //HIB_MIS_RTCALT0 = 1 ~ match occurred
@@ -46,7 +57,7 @@ void HibernateISRHandler()
         sprintf(str, "\r\nSample number = %d\r\n", sample_count);
         putsUart0(str);
         // temp();
-        // accel();
+        accel();
         // gyro();
         // compass();
         if (sample_count == sample_set){
@@ -64,6 +75,14 @@ void HibernateISRHandler()
     HIB_IC_R |= status;
     while (!(HIB_CTL_R & HIB_CTL_WRC));
     HIB_RTCLD_R = HIB_RTCC_R;
+}
+
+void batteryBackedRAM(){
+    char str[80];
+    *HIB_DATA_0 = 7;
+    *(HIB_DATA_0+1) = 5;
+    sprintf(str, "\r\nData1 = %d Data2= %d\r\n", *HIB_DATA_0,*(HIB_DATA_0+1));
+    putsUart0(str);
 }
 
 
