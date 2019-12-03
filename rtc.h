@@ -10,9 +10,9 @@
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
-uint16_t interval;
-uint32_t sample_count;
-uint32_t sample_set;
+uint32_t interval;
+uint8_t sample_count;
+uint8_t sample_set;
 
 void initRTC();
 void hibernateISRHandler();

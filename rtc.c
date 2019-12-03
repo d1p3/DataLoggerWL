@@ -24,20 +24,26 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 #include "tm4c123gh6pm.h"
 #include "rtc.h"
+#include "uart0.h"
 
 #define HIB_DATA_0          ((volatile unsigned long *)0x400FC030)
+#define PUSH_BUTTON_MASK 1
+void stop();
 void initRTC(){
-    HIB_CTL_R |= 0x41;
-    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32); // Enable Interrupts
+    HIB_CTL_R |= HIB_CTL_CLK32EN | HIB_CTL_RTCEN;
 }
 
-void setPeriodicMode(){
-    stop();
+void setPeriodicMode()
+{
+    NVIC_EN1_R |= 1 << (INT_HIBERNATE - 16 - 32); // Enable Interrupts
     HIB_RTCM0_R = HIB_RTCC_R + floor(interval/1000);
-    while (!(HIB_CTL_R & HIB_CTL_WRC));
-    HIB_RTCSS_R = (uint16_t)(interval%1000)*32768/1000 << HIB_RTCSS_RTCSSM_S;
+//    while (!(HIB_CTL_R & HIB_CTL_WRC));
+//    HIB_RTCSS_R = (uint16_t)(interval%1000)*32768/1000 << HIB_RTCSS_RTCSSM_S;
     while (!(HIB_CTL_R & HIB_CTL_WRC));
     HIB_IM_R |= HIB_IM_RTCALT0;
     while (!(HIB_CTL_R & HIB_CTL_WRC));
@@ -45,31 +51,30 @@ void setPeriodicMode(){
     while (!(HIB_CTL_R & HIB_CTL_WRC));
     HIB_RTCLD_R = HIB_RTCC_R;
 }
-
 void hibernateISRHandler(){
-    char str[80];
+    char str1[80];
+    sample_count = 0;
     uint32_t status = HIB_MIS_R;
-
     while (!(HIB_CTL_R & HIB_CTL_WRC));
+    if (status && HIB_MIS_RTCALT0)
+    {
+        sample_count++;
+        sprintf(str1, "\r\nSample number = %d\r\n", sample_count);
+        putsUart0(str1);
 
-    if (status && HIB_MIS_RTCALT0){ //HIB_MIS_RTCALT0 = 1 ~ match occurred
-        //sample_count++;
-        sprintf(str, "\r\nSample number = %d\r\n", sample_count);
-        putsUart0(str);
-        // temp();
-        accel();
-        // gyro();
-        // compass();
-        if (sample_count == sample_set){
-            HIB_IM_R &= ~HIB_IM_RTCALT0;
-            while (!(HIB_CTL_R & HIB_CTL_WRC));
-            sample_count = 0;
+        while (!(HIB_CTL_R & HIB_CTL_WRC));
+        if (sample_count == sample_set)
+        {
+            NVIC_EN1_R &= ~(1 << (INT_HIBERNATE - 16 - 32));
+            stop();
         }
-        else{
+
+        else
+        {
             HIB_RTCM0_R = HIB_RTCC_R + floor(interval/1000);
             while (!(HIB_CTL_R & HIB_CTL_WRC));
-            HIB_RTCSS_R = (uint16_t)(interval%1000)*32768/1000 << HIB_RTCSS_RTCSSM_S;
-            while (!(HIB_CTL_R & HIB_CTL_WRC));
+//            HIB_RTCSS_R = (uint16_t)(interval%1000)*32768/1000 << HIB_RTCSS_RTCSSM_S;
+//            while (!(HIB_CTL_R & HIB_CTL_WRC));
         }
     }
     HIB_IC_R |= status;
@@ -77,15 +82,21 @@ void hibernateISRHandler(){
     HIB_RTCLD_R = HIB_RTCC_R;
 }
 
-void batteryBackedRAM(){
-    char str[80];
-    *HIB_DATA_0 = 7;
-    *(HIB_DATA_0+1) = 5;
-    sprintf(str, "\r\nData1 = %d Data2= %d\r\n", *HIB_DATA_0,*(HIB_DATA_0+1));
-    putsUart0(str);
+void initTrigger()
+{
+    SYSCTL_RCGC2_R |= SYSCTL_RCGC2_GPIOF;
+    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;
+    GPIO_PORTF_CR_R = PUSH_BUTTON_MASK;
+    GPIO_PORTF_AMSEL_R &= ~PUSH_BUTTON_MASK;
+    GPIO_PORTF_PCTL_R = 0;
+    GPIO_PORTF_AFSEL_R = 0;
+    GPIO_PORTF_DEN_R |= PUSH_BUTTON_MASK;
+    GPIO_PORTF_PUR_R |= PUSH_BUTTON_MASK;
+    GPIO_PORTF_IS_R &= ~PUSH_BUTTON_MASK;
+    GPIO_PORTF_IBE_R &= ~PUSH_BUTTON_MASK;
+    GPIO_PORTF_IEV_R |= PUSH_BUTTON_MASK;
+    NVIC_EN0_R |= 1 << (INT_GPIOF - 16);
 }
-
-
 
 
 

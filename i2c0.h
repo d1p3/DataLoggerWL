@@ -30,6 +30,7 @@ void initI2c0();
 void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data);
 void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size);
 uint8_t readI2c0Register(uint8_t add, uint8_t reg);
+void readI2c0Registers(uint8_t add, uint8_t start_reg, uint8_t length, uint8_t *data);
 bool pollI2c0Address(uint8_t add);
 bool isI2c0Error();
 

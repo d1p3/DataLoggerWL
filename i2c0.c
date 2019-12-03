@@ -33,8 +33,7 @@
 // Subroutines
 //-----------------------------------------------------------------------------
 
-void initI2c0()
-{
+void initI2c0(){
     // Enable clocks
     SYSCTL_RCGCI2C_R |= SYSCTL_RCGCI2C_R0;
     SYSCTL_RCGC2_R |= SYSCTL_RCGC2_GPIOB;
@@ -54,24 +53,20 @@ void initI2c0()
 }
 
 
-void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size)
-{
+void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size){
     uint8_t i;
     I2C0_MSA_R = add*2;
     I2C0_MDR_R = reg;
-    if (size == 0)
-    {
+    if (size == 0){
         I2C0_MICR_R = I2C_MICR_IC;
         I2C0_MCS_R = I2C_MCS_STOP | I2C_MCS_START | I2C_MCS_RUN;
         while ((I2C0_MRIS_R & I2C_MRIS_RIS) == 0);
     }
-    else
-    {
+    else{
         I2C0_MICR_R = I2C_MICR_IC;
         I2C0_MCS_R = I2C_MCS_START | I2C_MCS_RUN;
         while ((I2C0_MRIS_R & I2C_MRIS_RIS) == 0);
-        for (i = 0; i < size-1; i++)
-        {
+        for (i = 0; i < size-1; i++){
             I2C0_MDR_R = data[i];
             I2C0_MICR_R = I2C_MICR_IC;
             I2C0_MCS_R = I2C_MCS_RUN;
@@ -84,8 +79,7 @@ void writeI2c0Registers(uint8_t add, uint8_t reg, uint8_t data[], uint8_t size)
     }
 }
 
-void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data)
-{
+void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data){
     I2C0_MSA_R = add*2;
     I2C0_MDR_R = reg;
     I2C0_MICR_R = I2C_MICR_IC;
@@ -98,8 +92,7 @@ void writeI2c0Register(uint8_t add, uint8_t reg, uint8_t data)
 }
 
 
-uint8_t readI2c0Register(uint8_t add, uint8_t reg)
-{
+uint8_t readI2c0Register(uint8_t add, uint8_t reg){
     I2C0_MSA_R = add*2;
     I2C0_MDR_R = reg;
     I2C0_MICR_R = I2C_MICR_IC;
@@ -112,8 +105,14 @@ uint8_t readI2c0Register(uint8_t add, uint8_t reg)
     return I2C0_MDR_R;
 }
 
-bool pollI2c0Address(uint8_t add)
-{
+void readI2c0Registers(uint8_t add, uint8_t start_reg, uint8_t length, uint8_t *data){
+    uint8_t i =0;
+    for(i=0;i<length;i++){
+        data[i] = readI2c0Register(add,start_reg + i);
+    }
+}
+
+bool pollI2c0Address(uint8_t add){
     I2C0_MSA_R = add*2 + 1;
     I2C0_MICR_R = I2C_MICR_IC;
     I2C0_MCS_R = I2C_MCS_STOP | I2C_MCS_START | I2C_MCS_RUN;
@@ -121,8 +120,7 @@ bool pollI2c0Address(uint8_t add)
     return !(I2C0_MCS_R & I2C_MCS_ERROR);
 }
 
-bool isI2c0Error()
-{
+bool isI2c0Error(){
     return !(I2C0_MCS_R & I2C_MCS_ERROR);
 }
 

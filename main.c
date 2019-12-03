@@ -40,6 +40,15 @@ uint32_t rtcD,rtcT;
 char str[MAX_CHARS];
 uint8_t pos[MAX_FIELDS];
 uint8_t count = 0;
+//[0]LowTemperature,[1]HighTemperature,[2]LowAccel,[3]HighAccel
+int gating_param[4];
+int log_mask[4] = {-1,-1,-1,-1};
+int hysteresis_mask[4] = {-1,-1,-1,-1};
+float accel_offset[3];
+float gyro_offset[3];
+float acceleration[3];
+float gyroscope_readings[3];
+int16_t magnetic_readings[3];
 
 typedef struct _DateTime {
     uint8_t month;
@@ -87,7 +96,6 @@ void tokenizeString()
     int i;
     int N = strlen(str);//Length of the input
     char p ='d';//previous
-    char c;//current
     for (i = 0; i < N; i++){
         char c = str[i];
         if (c>='a' && c<='z') //if c is alphabet (a-z)
@@ -143,57 +151,21 @@ uint8_t asciiToUint8(const char str[])
         sscanf(str, "%hhu", &data);
     return data;
 }
+void reset(){
+    NVIC_APINT_R = NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ;
+}
+
+void stop()
+{
+    putsUart0("\r\nSTOP\r\n");
+    interval = 0;
+}
+
 
 bool ExecuteCommand(){
     bool ok = true;
     char str1[80];
-    uint8_t i;
-    uint8_t add;
-    uint8_t reg;
-    uint8_t data;
-    //char strInput[MAX_CHARS+1];
-    char* token;
-    if (isCommand("start",0)){
-        putsUart0("All good!");
-        putsUart0("\r\n");
-    }
-
-    else if (isCommand("exit",0)){
-        putsUart0("Exiting!");
-        putsUart0("\r\n");
-    }
-
-    else if (isCommand("poll",0)){
-        putsUart0("Devices found: ");
-        for (i = 4; i < 119; i++)
-        {
-            if (pollI2c0Address(i))
-            {
-                sprintf(str1,"0x%02x ",i);
-                putsUart0(str1);
-            }
-        }
-        putsUart0("\r\n");
-    }
-
-    else if (isCommand("write",3)){
-        add = (uint8_t)getValue(0);
-        reg = (uint8_t)getValue(1);
-        data = (uint8_t)getValue(2);
-        writeI2c0Register(add, reg, data);
-        sprintf(str1, "Writing 0x%02hhx to address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-        putsUart0(str1);
-    }
-
-    else if (isCommand("read",2)){
-        add = (uint8_t)getValue(0);
-        reg = (uint8_t)getValue(1);
-        data = readI2c0Register(add, reg);
-        sprintf(str1, "Read 0x%02hhx from address 0x%02hhx, register 0x%02hhx\r\n", data, add, reg);
-        putsUart0(str1);
-    }
-
-    else if (isCommand("time",3)){
+    if (isCommand("time",3)){
           hour = getValue(0);
           min = getValue(1);
           sec = getValue(2);
@@ -236,7 +208,6 @@ bool ExecuteCommand(){
             mm = min + (hh+hour) % 24;
         }
 
-        DateTime dt;
         if(n_day >= 28){
             for(i=0;i<12;i++){
                 days_in_month = monthDays[i];
@@ -261,27 +232,26 @@ bool ExecuteCommand(){
     }
 
     else if (isCommand("accel",0)){
-        char * str2 = (char*)accel();
-        putsUart0(str2);
+        sprintf(str1,"x:%.2f,y:%.2f,z:%.2f,d:%d,t:%d\r\n", acceleration[0],acceleration[1],acceleration[2],HIB_RTCC_R-rtcD,HIB_RTCC_R-rtcT);
+        putsUart0(str1);
+        putsUart0("\r\n");
     }
 
     else if (isCommand("gyro",0)){
-        MPU9250_Gyroscope();
-        sprintf(str1,"gyrox: %d, gyroy: %d, gyroz: %d\r\n", degrees[0],degrees[1],degrees[2]);
+        sprintf(str1,"gyrox: %.2f, gyroy: %.2f, gyroz: %.2f\r\n", gyroscope_readings[0],gyroscope_readings[1],gyroscope_readings[2]);
         putsUart0(str1);
         putsUart0("\r\n");
     }
 
     else if (isCommand("compass",0)){
-        MPU9250_Compass();
-        sprintf(str1,"Compassx: %d, Compassy: %d, Compassz: %d\r\n", compass[0],compass[1],compass[2]);
+        sprintf(str1,"Compassx: %d, Compassy: %d, Compassz: %d\r\n", magnetic_readings[0],magnetic_readings[1],magnetic_readings[2]);
         putsUart0(str1);
         putsUart0("\r\n");
     }
 
     else if (isCommand("periodic",1)){
         interval = getValue(0);
-        setPeriodicMode();
+        setPeriodicMode(interval);
         putsUart0("Periodic mode set!");
     }
 
@@ -311,13 +281,38 @@ bool ExecuteCommand(){
         sample_set = getValue(0);
     }
 
-    else if (isCommand("stop",1)){
+    else if (isCommand("trigger",0)){
+        GPIO_PORTF_IM_R |= 1;   // enable interrupts for Push Button 2
+     }
+
+    else if(isCommand("gating",3)){
+        if(strcmp(getString(0),"temp") == 0){
+            //gating for Upper Temperature value;
+            gating_param[1] = getValue(1);
+            //gating for Lower Temperature value;
+            gating_param[0] = getValue(2);
+        }
+
+        if(strcmp(getString(0),"temp") == 0){
+             //gating for Upper Acceleration value;
+             gating_param[3] = getValue(1);
+             //gating for Lower Acceleration value;
+             gating_param[2] = getValue(2);
+         }
+    }
+
+    else if (isCommand("reset",0)){
+        reset();
+    }
+
+    else if (isCommand("stop",0)){
         stop();
-        interval = 60;
-        sprintf(str1, "\r\nInterval = %d \r\n",interval);
-        putsUart0(str1);
         putsUart0("Done!");
      }
+
+    else if (isCommand("save",0)){
+        putsUart0("Sam's implementation");
+      }
 
     else if (isCommand("help",0)){
         putsUart0("poll\r\n");
@@ -327,25 +322,33 @@ bool ExecuteCommand(){
         putsUart0("date mm dd yy\r\n");
         putsUart0("time \r\n");
         putsUart0("date \r\n");
-
     }
     else ok = false;
 
     return ok;
 }
 
-void stop()
+void singleValues(float *accel, float *gyroscope_readings, int16_t *magnetic_readings,float *offset_accel, float *offset_gyro)
 {
-    batteryBackedRAM();
+    float divider = 0;
+    MPU9250_Accelerometer(accel);
+    MPU9250_Gyroscope(gyroscope_readings);
+    MPU9250_Compass(magnetic_readings);
 
+    int i =0;
+    for(i=0;i<3;i++)
+    {
+       accel[i] = accel[i] - offset_accel[i];
+       divider += accel[i]*accel[i];
+       gyroscope_readings[i] = gyroscope_readings[i] - offset_gyro[i];
+    }
+
+    divider = sqrt(divider);
+    accel[0] = accel[0] / divider;
+    accel[1] = accel[1] / divider;
+    accel[2] = accel[2] / divider;
 }
 
-char* accel(){
-    char str1[32];
-    MPU9250_Accelerometer();
-    sprintf(str1,"x:%.2f,y:%.2f,z:%.2f,d:%d,t:%d\r\n", acceleration[0],acceleration[1],acceleration[2],HIB_RTCC_R-rtcD,HIB_RTCC_R-rtcT);
-    return str1;
-}
 //-----------------------------------------------------------------------------
 // Main
 //-----------------------------------------------------------------------------
@@ -357,7 +360,11 @@ int main(void)
     initUart0();
     initI2c0();
     initRTC();
+    enableCompass();
+    calibrate(accel_offset,gyro_offset);
+    singleValues(acceleration,gyroscope_readings,magnetic_readings,accel_offset,gyro_offset);
     test();
+
     putsUart0("Data Logger Ready! \r\n");
     putsUart0("TimeFormat hh mm ss \r\n");
     putsUart0("DateFormat mm dd yy \r\n");
